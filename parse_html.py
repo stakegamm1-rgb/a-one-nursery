@@ -1,0 +1,54 @@
+import urllib.request
+import re
+import json
+import time
+
+targets = {
+    "Peach": "Peach",
+    "Orange": "Orange_(fruit)",
+    "Coconut": "Coconut",
+    "Fig": "Common_fig",
+    "Pear": "Pear",
+    "Mulberry": "Morus_(plant)",
+    "Custard Apple": "Sugar-apple",
+    "Sweet Tamarind": "Tamarind",
+    "Jamun": "Syzygium_cumini",
+    "Amla": "Phyllanthus_emblica"
+}
+
+results = {}
+for name, title in targets.items():
+    try:
+        url = f"https://en.wikipedia.org/wiki/{title}"
+        req = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0'})
+        with urllib.request.urlopen(req, timeout=10) as response:
+            html = response.read().decode()
+            # find all thumb urls
+            matches = re.findall(r'src="//upload\.wikimedia\.org/wikipedia/commons/thumb/[^"]+\.jpg/(\d+)px-([^"]+\.jpg)"', html)
+            if matches:
+                # Get the first one that is a photograph, preferably of a tree, or just the main one.
+                # Construct the full image URL by using Special:FilePath with the exact filename!
+                # matches[0][1] is the filename!
+                filename = urllib.parse.unquote(matches[0][1])
+                img_url = f"https://commons.wikimedia.org/wiki/Special:FilePath/{urllib.parse.quote(filename)}?width=800"
+                results[name] = img_url
+                print(f"{name}: {img_url}")
+    except Exception as e:
+        print(f"Error for {name}: {e}")
+    time.sleep(1)
+
+import re
+with open("src/data/plants.js", "r") as f:
+    code = f.read()
+
+json_match = re.search(r'\[\s*\{[\s\S]*\}\s*\]', code)
+if json_match:
+    products = json.loads(json_match.group(0))
+    for p in products:
+        if p["name"] in results:
+            p["image"] = results[p["name"]]
+    
+    new_code = "// Catalog with absolute final images\nexport const plants = " + json.dumps(products, indent=2) + ";\n"
+    with open("src/data/plants.js", "w") as f:
+        f.write(new_code)
+    print("DONE updating plants.js")
